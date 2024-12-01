@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Blockchain Voting System</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .section {
+            margin-bottom: 20px;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+
+        button {
+            padding: 10px;
+            margin: 5px;
+            cursor: pointer;
+        }
+
+        input {
+            padding: 5px;
+            margin: 5px;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>Blockchain Voting System</h1>
+
+    <div class="section">
+        <h2>Register Voter</h2>
+        <input type="text" id="registerId" placeholder="Voter ID">
+        <button onclick="registerVoter()">Register</button>
+        <div id="registerResult"></div>
+    </div>
+
+    <div class="section">
+        <h2>Sign Vote</h2>
+        <input type="text" id="signVoteId" placeholder="Voter ID">
+        <input type="text" id="signVoteCandidate" placeholder="Candidate">
+        <input type="text" id="signVotePrivateKey" placeholder="Private Key">
+        <button onclick="signVote()">Sign Vote</button>
+        <div id="signVoteResult"></div>
+    </div>
+
+    <div class="section">
+        <h2>Cast Vote</h2>
+        <input type="text" id="voteId" placeholder="Voter ID">
+        <input type="text" id="voteCandidate" placeholder="Candidate">
+        <input type="text" id="voteSignature" placeholder="Signature (from Sign Vote)">
+        <button onclick="castVote()">Vote</button>
+        <div id="voteResult"></div>
+    </div>
+    <div class="section">
+        <h2>Reveal Vote</h2>
+        <input type="text" id="revealId" placeholder="Voter ID">
+        <button onclick="revealVote()">Reveal Vote</button>
+        <div id="revealResult"></div>
+    </div>
+    <script>
+        const API_URL = 'http://127.0.0.1:5000';
+
+        async function registerVoter() {
+            const voterId = document.getElementById('registerId').value;
+            try {
+                const response = await fetch(`${API_URL}/register`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ voter_id: voterId })
+                });
+
+                if (!response.ok) {
+                    throw new Error('Network response was not ok');
+                }
+
+                const data = await response.json();
+                document.getElementById('registerResult').innerText = JSON.stringify(data, null, 2);
+            } catch (error) {
+                document.getElementById('registerResult').innerText = 'Error: ' + error.message;
+            }
+        }
+
+        async function revealVote() {
+            const voterId = document.getElementById('revealId').value.trim();
+
+            console.log("Revealing vote for:", { voterId }); // Log input data
+
+            try {
+                const response = await fetch(`${API_URL}/reveal_vote`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ voter_id: voterId })
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(`Failed to reveal vote: ${errorData.message}`);
+                }
+
+                const data = await response.json();
+                document.getElementById('revealResult').innerText = `Your vote is: ${data.vote}`;
+            } catch (error) {
+                document.getElementById('revealResult').innerText = 'Error: ' + error.message;
+            }
+        }
+
+
+        async function signVote() {
+            const voterId = document.getElementById('signVoteId').value.trim();
+            const candidate = document.getElementById('signVoteCandidate').value.trim();
+            const privateKey = document.getElementById('signVotePrivateKey').value.trim();
+
+            // Replace escaped newlines with actual newlines
+            const formattedPrivateKey = privateKey.replace(/\\n/g, '\n');
+
+            console.log("Signing vote with:", { voterId, candidate, formattedPrivateKey }); // Log input data
+
+            try {
+                // Validate inputs
+                if (!voterId || !candidate || !formattedPrivateKey) {
+                    throw new Error('All fields are required.');
+                }
+
+                const response = await fetch(`${API_URL}/sign_vote`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        voter_id: voterId,
+                        vote: candidate,
+                        private_key: formattedPrivateKey // Use the formatted private key
+                    })
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json(); // Get error details from response
+                    throw new Error(`Failed to sign vote: ${errorData.message || 'Unknown error'}`);
+                }
+
+                const signData = await response.json();
+                document.getElementById('signVoteResult').innerText = JSON.stringify(signData, null, 2);
+
+                // Automatically fill in the signature field in the cast vote section
+                document.getElementById('voteSignature').value = signData.signature; // Set the signature for casting
+            } catch (error) {
+                document.getElementById('signVoteResult').innerText = 'Error: ' + error.message;
+            }
+        }
+
+        async function castVote() {
+            const voterId = document.getElementById('voteId').value.trim();
+            const candidate = document.getElementById('voteCandidate').value.trim();
+            const signature = document.getElementById('voteSignature').value.trim();
+
+            try {
+                if (!voterId || !candidate || !signature) {
+                    throw new Error('All fields are required for casting a vote.');
+                }
+
+                const voteResponse = await fetch(`${API_URL}/vote`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        voter_id: voterId,
+                        vote: candidate,
+                        signature
+                    })
+                });
+
+                if (!voteResponse.ok) {
+                    const errorData = await voteResponse.json(); // Get error details from response
+                    throw new Error(`Failed to cast vote: ${errorData.message}`);
+                }
+
+                const voteData = await voteResponse.json();
+                document.getElementById('voteResult').innerText = JSON.stringify(voteData, null, 2);
+            } catch (error) {
+                document.getElementById('voteResult').innerText = 'Error: ' + error.message;
+            }
+        }
+
+        async function revealVote() {
+            const voterId = document.getElementById('revealId').value.trim();
+            const vote = document.getElementById('revealVote').value.trim();
+            const nonce = document.getElementById('revealNonce').value.trim();
+
+            try {
+                const response = await fetch(`${API_URL}/reveal_vote`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ voter_id: voterId, vote, nonce })
+                });
+
+                if (!response.ok) {
+                    throw new Error('Failed to reveal vote');
+                }
+
+                const data = await response.json();
+                document.getElementById('revealResult').innerText = JSON.stringify(data, null, 2);
+            } catch (error) {
+                document.getElementById('revealResult').innerText = 'Error: ' + error.message;
+            }
+        }
+    </script>
+</body>
+
+</html>
