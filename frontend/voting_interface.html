@@ -31,10 +31,15 @@
             margin: 5px;
         }
     </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.8.1/socket.io.js"></script>
 </head>
 
 <body>
     <h1>Blockchain Voting System</h1>
+    <div class="section">
+        <h2>Real-Time Vote Tally</h2>
+        <div id="tallyResult">No votes yet.</div>
+    </div>
 
     <div class="section">
         <h2>Register Voter</h2>
@@ -61,11 +66,18 @@
         <div id="voteResult"></div>
     </div>
     <div class="section">
+        <button id="mine-button">Mine Block</button>
+    </div>
+    <div class="section">
         <h2>Reveal Vote</h2>
         <input type="text" id="revealId" placeholder="Voter ID">
+        <input type="text" id="revealVote" placeholder="Vote">
+        <input type="text" id="revealNonce" placeholder="Nonce">
         <button onclick="revealVote()">Reveal Vote</button>
         <div id="revealResult"></div>
     </div>
+
+
     <script>
         const API_URL = 'http://127.0.0.1:5000';
 
@@ -88,37 +100,69 @@
                 document.getElementById('registerResult').innerText = 'Error: ' + error.message;
             }
         }
-
+        async function mineBlock() {
+            try {
+                const response = await fetch(`${API_URL}/mine`, { method: 'GET' });
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                const result = await response.json();
+                alert(result.message);
+            } catch (error) {
+                console.error('Error:', error);
+                alert('Error: Failed to mine block');
+            }
+        }
+        document.addEventListener('DOMContentLoaded', function () {
+            const mineButton = document.getElementById('mine-button');
+            if (mineButton) {
+                mineButton.addEventListener('click', mineBlock);
+            }
+        });
         async function revealVote() {
+            // Retrieve user input values
             const voterId = document.getElementById('revealId').value.trim();
+            const vote = document.getElementById('revealVote').value.trim();
+            const nonce = document.getElementById('revealNonce').value.trim() || storedNonce; // Use stored nonce if input is empty
 
-            console.log("Revealing vote for:", { voterId }); // Log input data
+            console.log("Reveal Vote Inputs:", { voterId, vote, nonce });
+
+            if (!voterId || !vote || !nonce) {
+                alert("All fields are required to reveal a vote.");
+                return;
+            }
 
             try {
+                // API call to the backend reveal_vote endpoint
                 const response = await fetch(`${API_URL}/reveal_vote`, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ voter_id: voterId })
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ voter_id: voterId, vote, nonce }),
                 });
 
                 if (!response.ok) {
                     const errorData = await response.json();
-                    throw new Error(`Failed to reveal vote: ${errorData.message}`);
+                    throw new Error(errorData.message || `HTTP status ${response.status}`);
                 }
 
-                const data = await response.json();
-                document.getElementById('revealResult').innerText = `Your vote is: ${data.vote}`;
+                const result = await response.json();  // Correct use of 'result' instead of 'responseData'
+                console.log("Reveal Vote Success:", result);
+
+                document.getElementById('revealResult').innerText = JSON.stringify(result, null, 2);
+                alert("Vote revealed successfully!");
             } catch (error) {
-                document.getElementById('revealResult').innerText = 'Error: ' + error.message;
+                console.error("Error during revealVote API call:", error);
+                document.getElementById('revealResult').innerText = `Error: ${error.message}`;
+                alert("Failed to reveal the vote. Check the console for details.");
             }
         }
-
-
         async function signVote() {
             const voterId = document.getElementById('signVoteId').value.trim();
             const candidate = document.getElementById('signVoteCandidate').value.trim();
             const privateKey = document.getElementById('signVotePrivateKey').value.trim();
-
+            console.log(voterId,candidate,privateKey);
             // Replace escaped newlines with actual newlines
             const formattedPrivateKey = privateKey.replace(/\\n/g, '\n');
 
@@ -187,26 +231,20 @@
             }
         }
 
-        async function revealVote() {
-            const voterId = document.getElementById('revealId').value.trim();
-            const vote = document.getElementById('revealVote').value.trim();
-            const nonce = document.getElementById('revealNonce').value.trim();
+    </script>
+    <script>
+        const socket = io('http://127.0.0.1:5000');
 
-            try {
-                const response = await fetch(`${API_URL}/reveal_vote`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ voter_id: voterId, vote, nonce })
-                });
+        socket.on('vote_tally_update', (data) => {
+            console.log('Vote tally updated:', data);
+            updateVoteTally(data);
+        });
 
-                if (!response.ok) {
-                    throw new Error('Failed to reveal vote');
-                }
-
-                const data = await response.json();
-                document.getElementById('revealResult').innerText = JSON.stringify(data, null, 2);
-            } catch (error) {
-                document.getElementById('revealResult').innerText = 'Error: ' + error.message;
+        function updateVoteTally(tally) {
+            const tallyDiv = document.getElementById('tallyResult');
+            tallyDiv.innerHTML = '';
+            for (const [candidate, votes] of Object.entries(tally)) {
+                tallyDiv.innerHTML += `<p>${candidate}: ${votes} votes</p>`;
             }
         }
     </script>

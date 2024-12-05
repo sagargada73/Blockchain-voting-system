@@ -2,6 +2,7 @@ from Crypto.PublicKey import RSA
 from Crypto.Signature import pkcs1_15
 from Crypto.Hash import SHA256
 from flask import Flask, request, jsonify
+from flask_socketio import SocketIO
 import json
 import time
 import os
@@ -107,8 +108,8 @@ class Transaction:
 
 blockchain = Blockchain()
 app = Flask(__name__)
-socketio = SocketIO(app)
 CORS(app)
+socketio = SocketIO(app,cors_allowed_origins="*")
 
 # Store public keys (replace with database in the future)
 public_keys = {}
@@ -261,5 +262,5 @@ def vote_tally():
     return jsonify(blockchain.vote_counts), 200
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    socketio.run(app, debug=True)
 
